@@ -14,19 +14,19 @@ Usage
 2. Load: `%load_ext zip_extensions`
 3. Now you can manage your zip extensions:
 
-    * Install: `%install_zip_ext /Users/foo/bar.zip`
-    * Uninstall:` %uninstall_zip_ext /Users/foo/bar.zip`
-    * Reload: `%reload_zip_ext /Users/foo/bar.zip`
+    * Install: %install_zip_ext /Users/foo/bar.zip
+    * Uninstall: %uninstall_zip_ext extension_name
+    * Reload: %reload_zip_ext extension_name
         
-Optionally you can replace the standard ipython magics by calling %transparent_zip_extensions_magic after you have
-loaded zip_extensions. In this case:
+[Optionally] you can replace the standard ipython magics by calling `%transparent_zip_extensions_magic` after you have 
+loaded zip_extensions. In this case zip_extensions will replace standard magic functions:
         
     * %install_ext
     * %uninstall_ext
     * %reload_ext
         
-will start either delegating to standard IPython's %install_ext/%uninstall_ext/%reload_ext magics if you deal with .py,
-or will use the new logic for .zip extensions.
+At this point zip_extensions will delegate calls down to to standard implementations for .py, or will use the new logic 
+for .zip extensions.
     
     
     
