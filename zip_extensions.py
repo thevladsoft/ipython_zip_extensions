@@ -1,7 +1,8 @@
 from IPython import get_ipython
 from IPython.core.magic import (Magics, magics_class, line_magic)
 from IPython.core.magics.extension import ExtensionMagics
-import os, sys
+import os
+import sys
 import zipfile
 
 
@@ -18,7 +19,10 @@ class ZipExtensionsMagics(Magics):
         self.extension_magics.install_ext(line)
 
         if line.endswith(".zip"):
-            f = open(line, 'rb')
+            base_name = os.path.basename(line)
+            zip_file = os.path.join(self.extension_dir, base_name)
+
+            f = open(zip_file, 'rb')
 
             try:
                 z = zipfile.ZipFile(f)
@@ -32,27 +36,34 @@ class ZipExtensionsMagics(Magics):
             finally:
                 f.close()
 
-            zip_file = os.path.join(self.extension_dir, os.path.basename(line))
             print "remove zip: %s" % zip_file
             os.remove(os.path.join(self.extension_dir, zip_file))
 
 
     @line_magic
     def load_zip_ext(self, line):
-        path = os.path.join(self.extension_dir, line)
-        if os.path.isdir(path):
-            self.extension_magics.load_ext("%s.%s" % (line, os.path.basename(line)))
-        else:
-            self.extension_magics.load_ext(line)
+        name = self.__get_qualified_extension_name(line)
+        print "%%load_ext(%s)" % name
+        self.extension_magics.load_ext(name)
 
 
     @line_magic
     def unload_zip_ext(self, line):
-        path = os.path.join(self.extension_dir, line)
-        if os.path.isdir(path):
-            self.extension_magics.unload_ext("%s.%s" % (line, os.path.basename(line)))
-        else:
-            self.extension_magics.unload_ext(line)
+        name = self.__get_qualified_extension_name(line)
+        print "%%unload_ext(%s)" % name
+        self.extension_magics.unload_ext(name)
+
+    def __get_qualified_extension_name(self, extension_name):
+        """
+        Convert short extension_name to a fully qualified name that can be loaded/unloaded by standard
+        extension_magics.
+        """
+        path = os.path.join(self.extension_dir, extension_name)
+
+        if os.path.isdir(path) and os.path.exists(os.path.join(path, "__init__.py")):
+            return "%s.%s" % (extension_name, os.path.basename(extension_name))
+
+        return extension_name
 
 
     @line_magic
