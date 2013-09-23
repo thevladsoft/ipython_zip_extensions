@@ -29,8 +29,9 @@ loaded zip_extensions. In this case zip_extensions will replace standard magic f
         
 After replacing standard magics .zip, .tar.gz and .tgz will be managed by ipython_zip_extensions, while standard
 implementation will take care of .py extensions.
-    
-    
-    
-        
-    
+
+Troubleshooting
+---------------
+
+If you have problems with ipython_zip_extensions you can enabled debug logging with `%debug_zip_extensions on`. To
+disable logging use `%debug_zip_extensions off`.
