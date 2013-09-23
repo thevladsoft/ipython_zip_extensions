@@ -1,9 +1,12 @@
+import urllib2
+import urlparse
 from IPython import get_ipython
 from IPython.core.magic import (Magics, magics_class, line_magic)
 from IPython.core.magics.extension import ExtensionMagics
 import os
 import sys
 import zipfile
+import tarfile
 
 
 @magics_class
@@ -12,59 +15,113 @@ class ZipExtensionsMagics(Magics):
         super(ZipExtensionsMagics, self).__init__(shell)
         self.ipython = shell
         self.extension_magics = ExtensionMagics(self.ipython)
-        self.extension_dir = os.path.join(self.ipython.ipython_dir, 'extensions')
+        self.extensions_dir = os.path.join(self.ipython.ipython_dir, 'extensions')
+        self.__update_sys_path()
 
     @line_magic
     def install_zip_ext(self, line):
+        name = self.__url2name(line)
+        print "name: %s" % name
+
+        if name.endswith(".zip") or name.endswith(".gz") or name.endswith(".tgz"):
+            if not os.path.exists(line):
+                local_path = self.__download(line)
+            else:
+                local_path = self.__copy(line)
+
+            base_name = os.path.basename(local_path)
+            zip_file = os.path.join(self.extensions_dir, base_name)
+
+            if base_name.endswith(".zip"):
+                print "zip file: %s" % zip_file
+                z = zipfile.ZipFile(zip_file)
+                z.extractall(self.extensions_dir)
+            else:
+                print "tar file: %s" % zip_file
+                tar = tarfile.open(zip_file)
+                tar.extractall(self.extensions_dir)
+
+            print "cleanup file: %s" % zip_file
+            os.remove(os.path.join(self.extensions_dir, zip_file))
+
+            self.__update_sys_path()
+            return
+
         self.extension_magics.install_ext(line)
 
-        if line.endswith(".zip"):
-            base_name = os.path.basename(line)
-            zip_file = os.path.join(self.extension_dir, base_name)
+    def __update_sys_path(self):
+        print "update sys path"
+        index = set(sys.path)
+        for root, dirs, files in os.walk(self.extensions_dir):
+            for d in dirs:
+                rel_path = os.path.relpath(os.path.join(root, d), self.extensions_dir)
 
-            f = open(zip_file, 'rb')
+                hidden = False
+                for element in rel_path.split(os.sep):
+                    if element.startswith("."):
+                        hidden = True
 
-            try:
-                z = zipfile.ZipFile(f)
+                if not hidden:
+                    path = os.path.join(self.extensions_dir, root, d)
 
-                for name in z.namelist():
-                    z.extract(name, self.extension_dir)
-                    path = os.path.join(self.extension_dir, name)
-                    #  If we extracted a folder make sure that the data is available
-                    if os.path.isdir(path):
-                        sys.path += [os.path.join(self.extension_dir, name)]
-            finally:
-                f.close()
+                    if path not in index:
+                        print "add path: %s" % path
+                        sys.path.append(path)
+                        index.add(path)
 
-            print "remove zip: %s" % zip_file
-            os.remove(os.path.join(self.extension_dir, zip_file))
 
+    def __url2name(self, url):
+        return os.path.basename(urlparse.urlsplit(url)[2])
+
+    def __download(self, url):
+        print "__download: %s" % url
+        localName = self.__url2name(url)
+        req = urllib2.Request(url)
+        res = urllib2.urlopen(req)
+
+        if 'Content-Disposition' in res.info():
+            # If the response has Content-Disposition, we take file name from it
+            localName = res.info()['Content-Disposition'].split('filename=')[1]
+            if localName[0] == '"' or localName[0] == "'":
+                localName = localName[1:-1]
+        elif res.url != url:
+            # if we were redirected, the real file name we take from the final URL
+            localName = self.__url2name(res.url)
+
+        local_path = self.__serialize(res, localName)
+
+        print "downloaded to: %s" % local_path
+        return local_path
+
+    def __copy(self, file_path):
+        f = open(file_path, 'rb')
+        local_name = os.path.basename(file_path)
+        try:
+            local_path = self.__serialize(f, local_name)
+            print "copied to: %s" % local_path
+            return local_path
+        finally:
+            f.close()
+
+    def __serialize(self, stream, local_name):
+        """
+        Serialize generic stream into IPython extensions dir.
+        """
+        local_path = os.path.join(self.extensions_dir, local_name)
+        f = open(local_path, 'wb')
+        f.write(stream.read())
+        f.close()
+        return local_path
 
     @line_magic
     def load_zip_ext(self, line):
-        name = self.__get_qualified_extension_name(line)
-        print "%%load_ext(%s)" % name
-        self.extension_magics.load_ext(name)
-
+        print "%%load_ext(%s)" % line
+        self.extension_magics.load_ext(line)
 
     @line_magic
     def unload_zip_ext(self, line):
-        name = self.__get_qualified_extension_name(line)
-        print "%%unload_ext(%s)" % name
-        self.extension_magics.unload_ext(name)
-
-    def __get_qualified_extension_name(self, extension_name):
-        """
-        Convert short extension_name to a fully qualified name that can be loaded/unloaded by standard
-        extension_magics.
-        """
-        path = os.path.join(self.extension_dir, extension_name)
-
-        if os.path.isdir(path) and os.path.exists(os.path.join(path, "__init__.py")):
-            return "%s.%s" % (extension_name, os.path.basename(extension_name))
-
-        return extension_name
-
+        print "%%unload_ext(%s)" % line
+        self.extension_magics.unload_ext(line)
 
     @line_magic
     def reload_zip_ext(self, line):
